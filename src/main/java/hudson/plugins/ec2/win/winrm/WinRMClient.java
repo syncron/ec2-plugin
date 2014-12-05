@@ -200,7 +200,10 @@ public class WinRMClient {
     private DefaultHttpClient buildHTTPClient()
     {
         DefaultHttpClient httpclient = new DefaultHttpClient();
-        httpclient.getAuthSchemes().unregister(AuthPolicy.SPNEGO);
+        //httpclient.getAuthSchemes().unregister(AuthPolicy.SPNEGO);
+        httpclient.getAuthSchemes().unregister(AuthPolicy.KERBEROS);
+        httpclient.getAuthSchemes().unregister(AuthPolicy.DIGEST);
+        httpclient.getAuthSchemes().unregister(AuthPolicy.NTLM);
         httpclient.setCredentialsProvider(credsProvider);
         httpclient.getParams().setParameter(CoreConnectionPNames.CONNECTION_TIMEOUT, 5000);
         //httpclient.setHttpRequestRetryHandler(new WinRMRetryHandler());
