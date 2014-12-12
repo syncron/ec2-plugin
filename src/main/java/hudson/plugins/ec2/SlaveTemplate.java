@@ -33,6 +33,7 @@ import hudson.model.Descriptor.FormException;
 import hudson.model.Hudson;
 import hudson.model.Label;
 import hudson.model.Node;
+import hudson.model.Slave;
 import hudson.model.labels.LabelAtom;
 import hudson.plugins.ec2.util.DeviceMappingParser;
 import hudson.util.FormValidation;
@@ -437,7 +438,10 @@ public class SlaveTemplate implements Describable<SlaveTemplate> {
                 msg = "No existing instance found - created: "+inst;
                 logger.println(msg);
                 LOGGER.info(msg);
-                return newOndemandSlave(inst);
+                if (isSwarmInstance())
+                	return newSwarmOndemandSlave(inst);
+                else
+                	return newOndemandSlave(inst);
             }
 
             msg = "Found existing stopped instance: "+existingInstance;
@@ -462,11 +466,15 @@ public class SlaveTemplate implements Describable<SlaveTemplate> {
                 }
             }
 
-            // Existing slave not found
-            msg = "Creating new Jenkins slave for existing instance: "+existingInstance;
-            logger.println(msg);
-            LOGGER.info(msg);
-            return newOndemandSlave(existingInstance);
+            if (isSwarmInstance()) {
+                return newSwarmOndemandSlave(existingInstance);
+            } else {
+                // Existing slave not found
+                msg = "Creating new Jenkins slave for existing instance: "+existingInstance;
+                logger.println(msg);
+                LOGGER.info(msg);
+                return newOndemandSlave(existingInstance);
+            }
 
         } catch (FormException e) {
             throw new AssertionError(); // we should have discovered all configuration issues upfront
@@ -474,7 +482,7 @@ public class SlaveTemplate implements Describable<SlaveTemplate> {
             throw new RuntimeException(e);
         }
     }
-
+    
     private void setupEphemeralDeviceMapping(RunInstancesRequest riRequest) {
 
         final List<BlockDeviceMapping> oldDeviceMapping = getAmiBlockDeviceMappings();
@@ -677,7 +685,11 @@ public class SlaveTemplate implements Describable<SlaveTemplate> {
     protected EC2SpotSlave newSpotSlave(SpotInstanceRequest sir, String name) throws FormException, IOException {
         return new EC2SpotSlave(name, sir.getSpotInstanceRequestId(), description, remoteFS, getNumExecutors(), mode, initScript, labels, remoteAdmin, jvmopts, idleTerminationMinutes, EC2Tag.fromAmazonTags(sir.getTags()), parent.name, usePrivateDnsName, getLaunchTimeout(), amiType);
     }
-
+    
+    protected EC2SwarmOndemandSlave newSwarmOndemandSlave(Instance instance) throws FormException, IOException {
+    	return new EC2SwarmOndemandSlave(instance.getInstanceId(), description, remoteFS, getNumExecutors(), labels, mode, initScript, remoteAdmin, jvmopts, stopOnTerminate, idleTerminationMinutes, instance.getPublicDnsName(), instance.getPrivateDnsName(), EC2Tag.fromAmazonTags(instance.getTags()), parent.name, usePrivateDnsName, useDedicatedTenancy, getLaunchTimeout(), amiType);
+    }
+    
     /**
      * Get a KeyPair from the configured information for the slave template
      */
@@ -798,6 +810,10 @@ public class SlaveTemplate implements Describable<SlaveTemplate> {
         } else {
             return String.valueOf(launchTimeout);
         }
+    }
+
+    private boolean isSwarmInstance() {
+        return this.labels.contains("swarm-controller");
     }
 
     public boolean isWindowsSlave()
